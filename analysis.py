@@ -310,7 +310,8 @@ def binary_accuracy(output, target):
     #print(list(pred.data[0].numpy()))
     #print(list(target.data[0].numpy()))
     #print(pred.size(), target.size())
-    acc = (pred.int()).eq(target.int()).sum()
+    # TODO: targetが1か0かを判別する閾値は一番いいとこを見つける必要がある
+    acc = (pred.int()).eq((target >= 0.5).int()).sum()
     acc = acc*100 / np.prod(np.array(target.size()))
     return acc
 

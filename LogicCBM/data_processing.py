@@ -22,6 +22,7 @@ def extract_data(data_dir):
             items = line.strip().split()
             path_to_id_map[join(data_path, items[1])] = int(items[0])
 
+    # TODO： 使用するデータセットの確信度ラベルは計算がいらないので，この処理は不要　使うなら要変更
     attribute_labels_all = ddict(list) #map from image id to a list of attribute labels
     attribute_certainties_all = ddict(list) #map from image id to a list of attribute certainties
     attribute_uncertain_labels_all = ddict(list) #map from image id to a list of attribute labels calibrated for uncertainty

@@ -4,7 +4,8 @@ from difflogic import LogicLayer
 import torch
 from torch import nn
 
-PROJ_PATH = '<PROJECT_PATH>'
+# PROJ_PATH = '<PROJECT_PATH>'
+PROJ_PATH = '.'
 # Independent & Sequential Model
 def ModelXtoC(pretrained, freeze, num_classes, use_aux, n_attributes, expand_dim, three_class):
     return inception_v3(pretrained=pretrained, freeze=freeze, num_classes=num_classes, aux_logits=use_aux,

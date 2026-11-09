@@ -17,7 +17,7 @@ from collections import defaultdict
 import sys
 sys.path.append('<PROJECT_PATH>')
 
-from LogicCBM.config import BASE_DIR
+from LogicCBM.config import BASE_DIR, N_ATTRIBUTES, N_CLASSES
 from torch.utils.data import BatchSampler
 from torch.utils.data import Dataset, DataLoader, Subset
 import json
@@ -193,17 +193,43 @@ class CUBDataset(Dataset):
     @classmethod
     def select_concept_pairs(cls, instance, num_pairs):
         # Randomly select 30 samples from different classes and do a dot product between their concept vectors
+        
+        # rangeオブジェクトは0からインスタンスの数までの整数を生成
         num_samples = range(instance.__len__())
+
+        # 作ったペアを貯めとくリスト
         concept_pairs = []
+
+        # num_pairsの数だけ繰り返してペアを作るループのやつ
         for i in range(num_pairs):
-            num_inds = np.random.choice(range(12))
+            # サンプルの個数を0〜11の範囲でランダムに選ぶ
+            num_inds = np.random.choice(range(1,12))
+
+            # np.random.choiceはnum_samplesからnum_inds個のインデックスを重複なしで選ぶ
             inds = np.random.choice(num_samples, int(num_inds), replace=False)
+
+            # 選ばれたインデックスのサンプルを一つずつ取得してリストにする
             samples = [instance.__getitem__(i) for i in inds]
-            cumulative_presence = torch.zeros(312)
+
+            # 312要素のゼロベクトルを作って，各概念の出現回数をカウントする
+            # cubには312個の概念がある
+            cumulative_presence = torch.zeros(N_ATTRIBUTES)
+
+            # 選んだサンプルの数だけループして，そのサンプルの概念ラベルを累積する
             for sample in samples:
+                # sample[2]は概念ラベルのテンソル
+                # サンプルが持つ概念の出現回数を調べる
                 cumulative_presence += sample[2]
+
+            # cumulative_presenceの中で最も出現回数が多い2つの概念のインデックスを取得する
+            # 第一返り値は出現回数の値，第二返り値はそのインデックス
+            # 第一返り値はいらないので_で無視
             _, top_indices = torch.topk(cumulative_presence, 2)
+
+            # 2つの概念のインデックスをリストにしてconcept_pairsに貯めておく
             concept_pairs.append(top_indices.tolist())
+
+        # ペアのインデックスが記録されたconcept_pairsをテンソルに変換して返す
         return torch.tensor(concept_pairs)
 
     def __len__(self):
@@ -215,7 +241,7 @@ class CUBDataset(Dataset):
 
         # Trim unnecessary paths
         try:
-            idx = img_path.split('/').index('CUB_200_2011')
+            # idx = img_path.split('/').index('CUB_200_2011')
             img = Image.open(img_path).convert('RGB')
         except:
             img_path_split = img_path.split('/')

@@ -101,7 +101,7 @@ dependencies:
       - contourpy==1.2.1
       - data==0.4
       - debugpy==1.8.1
-      - difflogic==0.1.0
+      # - difflogic==0.1.0
       - ftfy==6.2.0
       - gdown==5.2.0
       - gitdb==4.0.11

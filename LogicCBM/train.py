@@ -5,12 +5,13 @@ import os
 import sys
 import argparse
 import wandb
+import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tqdm import tqdm
 
 import math
 import torch
-from LogicCBMs.analysis import Logger, AverageMeter, accuracy, binary_accuracy
+from analysis import Logger, AverageMeter, accuracy, binary_accuracy
 import torchvision.transforms as transforms
 
 from LogicCBM.dataset import find_class_imbalance, load_data, CUBDataset, Cifar100Loader, AnimalDataset
@@ -64,7 +65,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter1, acc_meter2, crit
         else:
             inputs, labels, attr_labels = data
             if args.n_attributes > 1:
-                attr_labels = [i.long() for i in attr_labels]
+                attr_labels = [i.float() for i in attr_labels]
                 attr_labels = torch.stack(attr_labels, dim=1).t()#.float() #N x 312
             else:
                 if isinstance(attr_labels, list):
@@ -84,6 +85,9 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter1, acc_meter2, crit
             losses = []
             out_start = 0
             if not args.bottleneck: #loss main is for the main task label (always the first output)
+                # クラス分類誤差を計算
+                # 最終結果を1倍，中間結果を0.4倍して誤差を計算
+                # 200クラス一気に誤差を計算してます
                 loss_main = 1.0 * criterion(outputs[0], labels_var) + 0.4 * criterion(aux_outputs[0], labels_var) 
                 losses.append(loss_main)
                 out_start = 1
@@ -133,6 +137,7 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter1, acc_meter2, crit
             if args.bottleneck:
                 total_loss = sum(losses)/ args.n_attributes
             else: #cotraining, loss by class prediction and loss by attribute prediction have the same weight
+                # クラス分類誤差と概念予測誤差を足し合わせてトータルロスを計算
                 total_loss = losses[0] + sum(losses[1:])
                 if args.normalize_loss:
                     total_loss = total_loss / (1 + args.attr_loss_weight * args.n_attributes)
@@ -140,8 +145,13 @@ def run_epoch(model, optimizer, loader, loss_meter, acc_meter1, acc_meter2, crit
             total_loss = sum(losses)
         loss_meter.update(total_loss.item(), inputs.size(0))
         if is_training:
+            # 勾配を初期化
             optimizer.zero_grad()
+
+            # バックプロパゲーションを勝手にやってくれる魔法の関数
             total_loss.backward()
+
+            # パラメータを更新する魔法の関数
             optimizer.step()
             
     if args.use_aux_clf:
@@ -159,7 +169,10 @@ def train(model, args):
             imbalance = find_class_imbalance(train_data_path, False)
             
     model = model.cuda()
-    run_name = "<RUN_NAME>"
+    # run_name = "<RUN_NAME>"
+    # 実験名をrun_nameに設定する
+    run_name = f"{args.dataset}_{args.exp}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_seed{args.seed}"
+    
     # if torch.cuda.device_count() > 1:
     #     model = torch.nn.DataParallel(model)
     
@@ -271,7 +284,7 @@ def train_Chat_to_y_and_test_on_Chat(args):
     train(model, args)
 
 def train_X_to_C_to_y(args):
-    n_classes = 200
+    n_classes = N_CLASSES
     if args.dataset == "cifar100":
         n_classes = 100
     if args.dataset == "awa2":
@@ -285,7 +298,7 @@ def train_X_to_C_to_y(args):
     train(model, args)
     
 def train_X_to_bC_to_Ly(args):
-    n_classes = 200
+    n_classes = N_CLASSES
     args.concept_pairs = None
     if args.dataset == "cub":
         train_data_path = os.path.join(BASE_DIR, args.data_dir, 'train.pkl')

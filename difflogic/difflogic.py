@@ -13,6 +13,7 @@ import torch.nn.functional as F
 # torch.set_printoptions(edgeitems=torch.inf)
 
 def create_random_onehot_tensor(n, m=16):
+    # 各論理ゲートニューロンに対して，適当に1つの論理ゲートを割り当てる
     indices = torch.randint(0, m, (n,))
     return F.one_hot(indices, num_classes=m).float()
 
@@ -42,18 +43,44 @@ class LogicLayer(torch.nn.Module):
         :param connections: method for initializing the connectivity of the logic gate net
         """
         super().__init__()
+        # 使用する論理ゲートの数（ファジィ論理の16個）
         self.n_logic_gates = n_logic_gates
+
+        # 論理ゲート行列の生成
+        # 論理ゲートニューロンの数 x 論理ゲートの数（16個）
         self.weights = torch.nn.parameter.Parameter(torch.randn(out_dim, self.n_logic_gates, device=device))
+
+        # 論理ゲートの関係性を計算するためのパラメータ
+
+        # 入力次元数
+        # 論理ゲートを使って表現したい概念の数
         self.in_dim = in_dim
+
+        # 出力次元数
+        # 最終的に用意したい論理ゲートニューロンの数
         self.out_dim = out_dim
+
+        # 計算するデバイス
         self.device = device
+
+        # 勾配のスケーリング係数
         self.grad_factor = grad_factor
+
+        # 論理ゲートの重みを保存する変数
         self.logic_weights = None
+
+        # 論理ゲートの種類を保存する変数
         self.discrete_gates = discrete_gates
+
+        # 論理ゲートを学習させるかどうか
+        # ランダムで試して効果があるかどうか見る用
         self.fixed_gates = fixed_gates
+
+        # 論理ゲートで関係性を調べたいペア（論理ゲートニューロンの数だけある）
         self.concept_pairs = concept_pairs
 
         if self.fixed_gates:
+            # 論理ゲートの学習をしないときは，ランダムに論理ゲートを割り当てる
             self.weights = torch.nn.parameter.Parameter(create_random_onehot_tensor(self.out_dim), requires_grad=False)
         """
         The CUDA implementation is the fast implementation. As the name implies, the cuda implementation is only 
@@ -72,6 +99,10 @@ class LogicLayer(torch.nn.Module):
         assert self.connections in ['random', 'unique', 'full', 'correlated'], self.connections
         if self.connections == 'full':
             self.logic_weights = nn.Linear(self.in_dim, self.out_dim)
+
+        # これから関係性を見るペアのインデックスを取得する
+        # self.indicesは[2, 250]のテンソル
+        # 0行目がペアの1つ目のインデックス，1行目がペアの2つ目のインデックス
         self.indices = self.get_connections(self.connections, device)
 
         if self.implementation == 'cuda':
@@ -93,6 +124,8 @@ class LogicLayer(torch.nn.Module):
         self.num_weights = out_dim
 
     def forward(self, x):
+        # template_modelで作った[バッチサイズ, 概念数]のテンソルをxとして受け取る
+
         if isinstance(x, PackBitsTensor):
             assert not self.training, 'PackBitsTensor is not supported for the differentiable training mode.'
             assert self.device == 'cuda', 'PackBitsTensor is only supported for CUDA, not for {}. ' \
@@ -105,21 +138,34 @@ class LogicLayer(torch.nn.Module):
         return self.forward_python(x)
 
     def forward_python(self, x):
+        # 入力の次元数（概念の数）が論理ゲートの入力次元数と同じであることを確認する
         assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
 
+        # 要素をインデックスとして使うために整数型に変換
         if self.indices[0].dtype == torch.int64 or self.indices[1].dtype == torch.int64:
             self.indices = self.indices[0].long(), self.indices[1].long()
-        
+
+        # ランダムペアじゃないときは，計算からペアを取得する必要がある
         if self.connections == 'full' or self.connections == 'correlated':
             self.indices = self.get_connections(self.connections, self.device)
-        
+
+        # さっき取得したペアのインデックスを使って，入力の概念ベクトルから2つの概念値を取り出す
+        # バッチから取り出した概念値から，250個全てのペアの概念値を作成する
+        # aには全てのペアの1つ目の概念値が， bには全てのペアの2つ目の概念値が入る
+        # 鳥なら，それぞれ250個の概念ペアが一気に概念値を取り出せる
         a, b = x[..., self.indices[0]], x[..., self.indices[1]]
         if self.training:
+            # 8種類しかゲートを使わない謎ルート
             if self.n_logic_gates == 8:
                 x = bin_op_reduced(a, b, self.weights).to(torch.float32)
+
+            # 固定ゲートにした時に通るルート
             elif self.fixed_gates:
                 x = bin_op_s(a, b, self.weights).to(torch.float32)
+            
+            # 通常のルート
             else:
+                # a,bはすでに0~1の範囲に正規化されているので処理不要
                 x = bin_op_s(a, b, torch.nn.functional.softmax(self.weights, dim=-1)).to(torch.float32)
         else:
             weights = torch.nn.functional.one_hot(self.weights.argmax(-1), self.n_logic_gates).to(torch.float32)
@@ -177,6 +223,8 @@ class LogicLayer(torch.nn.Module):
         # assert self.out_dim * 2 >= self.in_dim, 'The number of neurons ({}) must not be smaller than half of the ' \
         #                                         'number of inputs ({}) because otherwise not all inputs could be ' \
         #                                         'used or considered.'.format(self.out_dim, self.in_dim)
+
+        # TODO：ここの意味を知りたい
         if connections == 'random':
             c = torch.randperm(2 * self.out_dim) % self.in_dim
             c = torch.randperm(self.in_dim)[c]
