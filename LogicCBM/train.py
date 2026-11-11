@@ -5,7 +5,7 @@ import os
 import sys
 import argparse
 import wandb
-import datetime
+from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tqdm import tqdm
 

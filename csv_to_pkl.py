@@ -75,7 +75,7 @@ def convert_df_to_pkl(target_df):
         for col in concept_cols:
             # uncertain_attribute_labelは属性ラベルをそのまま入れる（1~5）
             # お試し，0~1の範囲に正規化するために4で割る
-            uncertain_attribute_label.append(float(row[col]) - 1.0 / 4.0)
+            uncertain_attribute_label.append((float(row[col]) - 1.0) / 4.0)
 
             # 0,1のラベルに変換する
             if row[col] == 1:
@@ -90,7 +90,7 @@ def convert_df_to_pkl(target_df):
             "id": int(idx),
             "img_path": img_path,
             "class_label": int(row[CLASS_COL]),
-            "attribute_labels": attr_labels,
+            "attribute_label": attr_labels,
             "uncertain_attribute_label": uncertain_attribute_label
         })
 
